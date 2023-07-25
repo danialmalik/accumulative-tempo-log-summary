@@ -1,0 +1,14 @@
+{
+    "projects": [
+        {
+            "name": "Project A",
+            "user": "UserId",
+            "tempo_token": "TEMPO_TOKEN"
+        },
+        {
+            "name": "Project B",
+            "user": "UserID",
+            "tempo_token": "TEMPO_TOKEN"
+        }
+    ]
+}
