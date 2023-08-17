@@ -18,7 +18,9 @@ else:
     logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 TEMPO_API_BASE = os.environ.get("TEMPO_API_BASE", "https://api.tempo.io/4")
-TEMPO_API_WORKLOGS_ENDPOINT = os.environ.get("TEMPO_API_WORKLOGS_ENDPOINT", "/worklogs/user")
+TEMPO_API_WORKLOGS_ENDPOINT = os.environ.get(
+    "TEMPO_API_WORKLOGS_ENDPOINT", "/worklogs/user"
+)
 
 HoursLog = namedtuple("HourLog", ["date", "hours"])
 
@@ -106,10 +108,12 @@ class LogsSummary:
 
         return today_week_day * 8
 
-    def get_week_work_required_difference(self, within_current_month: bool = True) -> float:
-        return self.get_total_week_hours(within_current_month=within_current_month) - self.get_required_hours_for_week(
+    def get_week_work_required_difference(
+        self, within_current_month: bool = True
+    ) -> float:
+        return self.get_total_week_hours(
             within_current_month=within_current_month
-        )
+        ) - self.get_required_hours_for_week(within_current_month=within_current_month)
 
     @property
     def required_hours_for_month(self) -> float:
@@ -157,11 +161,18 @@ def cli_main():
     Logger.log_info("=============Daily Hours=============")
     for day, hours in summary.hours_by_day.items():
         week_day_name = calendar.day_name[day.weekday()]
-        Logger.log_info(get_justified_string(f"{day} [{week_day_name}]", f": {float_to_hours_minutes(hours)}"))
+        Logger.log_info(
+            get_justified_string(
+                f"{day} [{week_day_name}]", f": {float_to_hours_minutes(hours)}"
+            )
+        )
 
     Logger.log_info("=============Week Hours=============")
     Logger.log_info(
-        get_justified_string("Total Week Hours", f": {float_to_hours_minutes(summary.get_total_week_hours())}")
+        get_justified_string(
+            "Total Week Hours",
+            f": {float_to_hours_minutes(summary.get_total_week_hours())}",
+        )
     )
     Logger.log_info(
         get_justified_string(
@@ -173,14 +184,27 @@ def cli_main():
     difference: float = summary.get_week_work_required_difference()
 
     if difference >= 0:
-        Logger.log_success(get_justified_string("Difference", f": {float_to_hours_minutes(difference)}"))
+        Logger.log_success(
+            get_justified_string(
+                "Difference", f": {float_to_hours_minutes(difference)}"
+            )
+        )
     else:
-        Logger.log_error(get_justified_string("Difference", f" : {float_to_hours_minutes(difference)}"))
+        Logger.log_error(
+            get_justified_string(
+                "Difference", f" : {float_to_hours_minutes(difference)}"
+            )
+        )
 
     Logger.log_info("=============Month Hours=============")
     difference: float = summary.month_work_required_difference
 
-    Logger.log_info(get_justified_string("Total Month Hours", f": {float_to_hours_minutes(summary.total_month_hours)}"))
+    Logger.log_info(
+        get_justified_string(
+            "Total Month Hours",
+            f": {float_to_hours_minutes(summary.total_month_hours)}",
+        )
+    )
     Logger.log_info(
         get_justified_string(
             "Total Month Hours / required hours",
@@ -190,9 +214,17 @@ def cli_main():
     )
 
     if difference >= 0:
-        Logger.log_success(get_justified_string("Difference", f": {float_to_hours_minutes(difference)}"))
+        Logger.log_success(
+            get_justified_string(
+                "Difference", f": {float_to_hours_minutes(difference)}"
+            )
+        )
     else:
-        Logger.log_error(get_justified_string("Difference", f": {float_to_hours_minutes(difference)}"))
+        Logger.log_error(
+            get_justified_string(
+                "Difference", f": {float_to_hours_minutes(difference)}"
+            )
+        )
 
 
 def get_total_hours_summary(tempos) -> LogsSummary:
@@ -215,8 +247,16 @@ def get_total_hours_summary(tempos) -> LogsSummary:
             if log.date >= week_start_date:
                 current_week_total += log.hours
 
-        Logger.log_info(get_justified_string("Total weekly hours for {tempo['name']}", f": {current_week_total}"))
-        Logger.log_info(get_justified_string("Total monthly hours for {tempo['name']}", f": {current_month_total}"))
+        Logger.log_info(
+            get_justified_string(
+                "Total weekly hours for {tempo['name']}", f": {current_week_total}"
+            )
+        )
+        Logger.log_info(
+            get_justified_string(
+                "Total monthly hours for {tempo['name']}", f": {current_month_total}"
+            )
+        )
 
     return logs_summary
 
@@ -265,7 +305,9 @@ def get_hours_from_api(
         logged_time = log["timeSpentSeconds"] / 3600
         start_date = datetime.datetime.strptime(log["startDate"], "%Y-%m-%d").date()
 
-        Logger.log_debug(f"Adding {logged_time} hours for {start_date} :: {log['issue']['self']}")
+        Logger.log_debug(
+            f"Adding {logged_time} hours for {start_date} :: {log['issue']['self']}"
+        )
         accumulative_hours.append(HoursLog(start_date, logged_time))
 
     next_api_url = response.get("metadata", {}).get("next", "")
