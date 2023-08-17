@@ -1,3 +1,4 @@
+import calendar
 import datetime
 import json
 import logging
@@ -9,10 +10,12 @@ import requests
 
 DEBUG = bool(os.environ.get("DEBUG", False))
 
+LOG_FORMAT = "%(levelname)-8s:: %(message)s"
+
 if DEBUG:
-    logging.basicConfig(level=logging.DEBUG)
+    logging.basicConfig(level=logging.DEBUG, format=LOG_FORMAT)
 else:
-    logging.basicConfig(level=logging.INFO)
+    logging.basicConfig(level=logging.INFO, format=LOG_FORMAT)
 
 TEMPO_API_BASE = os.environ.get("TEMPO_API_BASE", "https://api.tempo.io/4")
 TEMPO_API_WORKLOGS_ENDPOINT = os.environ.get("TEMPO_API_WORKLOGS_ENDPOINT", "/worklogs/user")
@@ -29,6 +32,14 @@ def get_start_of_week(within_current_month: bool = True) -> datetime.date:
         return max(last_monday, start_of_month)
     else:
         return last_monday
+
+
+def get_justified_string(left_string, *rest_strings, length=50, padding_char="-"):
+    return left_string.ljust(length, padding_char) + "".join(rest_strings)
+
+
+def float_to_hours_minutes(value: float) -> str:
+    return f"{int(value)}h {int((abs(value) % 1) * 60)}m"
 
 
 class LogsSummary:
@@ -118,23 +129,19 @@ class Logger:
 
     @staticmethod
     def log_info(message: str) -> None:
-        logging.info(Logger.BLUE + "[INFO] " + message + Logger.RESET)
+        logging.info(Logger.BLUE + message + Logger.RESET)
 
     @staticmethod
     def log_success(message: str) -> None:
-        logging.info(Logger.GREEN + "[SUCCESS] " + message + Logger.RESET)
+        logging.info(Logger.GREEN + message + Logger.RESET)
 
     @staticmethod
     def log_error(message: str) -> None:
-        logging.error(Logger.RED + "[ERROR] " + message + Logger.RESET)
+        logging.error(Logger.RED + message + Logger.RESET)
 
     @staticmethod
     def log_debug(message: str) -> None:
-        logging.debug(Logger.YELLOW + "[DEBUG] " + message + Logger.RESET)
-
-
-def float_to_hours_minutes(value: float) -> str:
-    return f"{int(value)}h {int((abs(value) % 1) * 60)}m"
+        logging.debug(Logger.YELLOW + message + Logger.RESET)
 
 
 def launch_ui():
@@ -149,33 +156,43 @@ def cli_main():
 
     Logger.log_info("=============Daily Hours=============")
     for day, hours in summary.hours_by_day.items():
-        Logger.log_info(f"{day}: {float_to_hours_minutes(hours)}")
+        week_day_name = calendar.day_name[day.weekday()]
+        Logger.log_info(get_justified_string(f"{day} [{week_day_name}]", f": {float_to_hours_minutes(hours)}"))
 
     Logger.log_info("=============Week Hours=============")
-    Logger.log_info(f"Total Week Hours: {float_to_hours_minutes(summary.get_total_week_hours())}")
     Logger.log_info(
-        f"Total Week Hours / required hours : {float_to_hours_minutes(summary.get_total_week_hours())}"
-        f" / {float_to_hours_minutes(summary.get_required_hours_for_week())}"
+        get_justified_string("Total Week Hours", f": {float_to_hours_minutes(summary.get_total_week_hours())}")
+    )
+    Logger.log_info(
+        get_justified_string(
+            "Total Week Hours / required hours",
+            f": {float_to_hours_minutes(summary.get_total_week_hours())}",
+            f" / {float_to_hours_minutes(summary.get_required_hours_for_week())}",
+        )
     )
     difference: float = summary.get_week_work_required_difference()
 
     if difference >= 0:
-        Logger.log_success(f"Difference : {float_to_hours_minutes(difference)}")
+        Logger.log_success(get_justified_string("Difference", f": {float_to_hours_minutes(difference)}"))
     else:
-        Logger.log_error(f"Difference : {float_to_hours_minutes(difference)}")
+        Logger.log_error(get_justified_string("Difference", f" : {float_to_hours_minutes(difference)}"))
 
     Logger.log_info("=============Month Hours=============")
     difference: float = summary.month_work_required_difference
 
-    Logger.log_info(f"Total Month Hours: {float_to_hours_minutes(summary.total_month_hours)}")
+    Logger.log_info(get_justified_string("Total Month Hours", f": {float_to_hours_minutes(summary.total_month_hours)}"))
     Logger.log_info(
-        f"Total Month Hours / required hours : {float_to_hours_minutes(summary.total_month_hours)} / "
-        f"{float_to_hours_minutes(summary.required_hours_for_month)}"
+        get_justified_string(
+            "Total Month Hours / required hours",
+            f": {float_to_hours_minutes(summary.total_month_hours)} / ",
+            f"{float_to_hours_minutes(summary.required_hours_for_month)}",
+        )
     )
+
     if difference >= 0:
-        Logger.log_success(f"Difference : {float_to_hours_minutes(difference)}")
+        Logger.log_success(get_justified_string("Difference", f": {float_to_hours_minutes(difference)}"))
     else:
-        Logger.log_error(f"Difference : {float_to_hours_minutes(difference)}")
+        Logger.log_error(get_justified_string("Difference", f": {float_to_hours_minutes(difference)}"))
 
 
 def get_total_hours_summary(tempos) -> LogsSummary:
@@ -198,8 +215,8 @@ def get_total_hours_summary(tempos) -> LogsSummary:
             if log.date >= week_start_date:
                 current_week_total += log.hours
 
-        Logger.log_info(f"Total weekly hours for {tempo['name']}: {current_week_total}")
-        Logger.log_info(f"Total monthly hours for {tempo['name']}: {current_month_total}")
+        Logger.log_info(get_justified_string("Total weekly hours for {tempo['name']}", f": {current_week_total}"))
+        Logger.log_info(get_justified_string("Total monthly hours for {tempo['name']}", f": {current_month_total}"))
 
     return logs_summary
 
