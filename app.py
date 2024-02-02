@@ -3,6 +3,7 @@ import datetime
 import json
 import logging
 import os
+import sys
 from collections import namedtuple
 from typing import List, Union
 
@@ -25,17 +26,6 @@ TEMPO_API_WORKLOGS_ENDPOINT = os.environ.get(
 HoursLog = namedtuple("HourLog", ["date", "hours"])
 
 
-def get_start_of_week(within_current_month: bool = True) -> datetime.date:
-    today = datetime.date.today()
-    last_monday = today - datetime.timedelta(days=today.weekday())
-    start_of_month = datetime.date(today.year, today.month, 1)
-
-    if within_current_month:
-        return max(last_monday, start_of_month)
-    else:
-        return last_monday
-
-
 def get_left_justified_string(left_string, *rest_strings, length=50, padding_char="-"):
     return left_string.ljust(length, padding_char) + "".join(rest_strings)
 
@@ -45,20 +35,33 @@ def get_centered_string(string, length=70, padding_char="-"):
 
 
 def float_to_hours_minutes(value: float) -> str:
-    return f"{int(value)}h {int((abs(value) % 1) * 60)}m"
+    sign = "-" if value < 0 else "+"
+    return f"{sign}{int(value)}h {int((abs(value) % 1) * 60)}m"
 
 
 class LogsSummary:
     hours_by_day: dict
+    reference_date: datetime.date
 
-    def __init__(self) -> None:
+    def __init__(self, reference_date: Union[datetime.date, None] = None) -> None:
         self.hours_by_day = {}
+        self.reference_date = reference_date or datetime.datetime.today().date()
+
+    def get_start_of_week(self, within_current_month: bool = True) -> datetime.date:
+        current = self.reference_date
+        last_monday = current - datetime.timedelta(days=current.weekday())
+        start_of_month = datetime.date(current.year, current.month, 1)
+
+        if within_current_month:
+            return max(last_monday, start_of_month)
+        else:
+            return last_monday
 
     def add_day_hours(self, day: datetime.date, hours: float) -> None:
         self.hours_by_day[day] = self.hours_by_day.get(day, 0) + hours
 
     def get_total_week_hours(self, within_current_month: bool = True) -> float:
-        start_date = get_start_of_week(within_current_month=within_current_month)
+        start_date = self.get_start_of_week(within_current_month=within_current_month)
 
         total_hours = 0
 
@@ -70,47 +73,47 @@ class LogsSummary:
 
     @property
     def total_month_hours(self) -> float:
-        today = datetime.date.today()
+        current = self.reference_date
         total_hours = 0
-        for day in range(1, today.day + 1):
-            date = datetime.date(today.year, today.month, day)
+        for day in range(1, current.day + 1):
+            date = datetime.date(current.year, current.month, day)
             total_hours += self.hours_by_day.get(date, 0)
 
         return total_hours
 
     @property
     def working_days_in_month(self) -> int:
-        today = datetime.date.today()
+        current = self.reference_date
         working_days = 0
 
-        for day in range(1, today.day + 1):
-            date = datetime.date(today.year, today.month, day)
+        for day in range(1, current.day + 1):
+            date = datetime.date(current.year, current.month, day)
             if date.weekday() < 5:  # Monday to Friday (0-4 are weekdays)
                 working_days += 1
 
         return working_days
 
     def get_required_hours_for_week(self, within_current_month: bool = True) -> float:
-
+        current = self.reference_date
         if within_current_month:
-            today_week_day = min(
+            reference_week_day = min(
                 # Day of the week, Monday is 0
-                datetime.datetime.today().weekday() + 1,
+                current.weekday() + 1,
                 # Day of the month, 1-31. If the month started during the week
                 # working days.
-                datetime.datetime.today().day,
+                current.day,
                 # Friday. Sat and sunday are not working days.
                 5,
             )
         else:
-            today_week_day = min(
+            reference_week_day = min(
                 # Day of the week, Monday is 0
-                datetime.datetime.today().weekday() + 1,
+                current.weekday() + 1,
                 # Friday (4+1). Sat and sunday are not working days.
                 5,
             )
 
-        return today_week_day * 8
+        return reference_week_day * 8
 
     def get_week_work_required_difference(
         self, within_current_month: bool = True
@@ -162,7 +165,25 @@ def launch_ui():
 def cli_main():
     tempos: dict = get_jira_projects()
 
-    summary: LogsSummary = get_total_hours_summary(tempos)
+    reference_date = sys.argv[1] if len(sys.argv) > 1 else None
+
+    if reference_date:
+        try:
+            Logger.log_info(f"Getting hours till {reference_date}")
+            reference_date = datetime.datetime.strptime(
+                reference_date, "%Y-%m-%d"
+            ).date()
+        except ValueError:
+            Logger.log_error(
+                "Invalid reference date format. Expected YYYY-MM-DD,"
+                f" got {reference_date}"
+            )
+            exit(1)
+    else:
+        Logger.log_info("Getting hours till today")
+        reference_date = datetime.datetime.today().date()
+
+    summary: LogsSummary = get_total_hours_summary(tempos, reference_date)
 
     Logger.log_info(
         get_centered_string("Daily Hours", padding_char="="), color=Logger.CYAN
@@ -220,15 +241,15 @@ def cli_main():
     )
 
 
-def get_total_hours_summary(tempos) -> LogsSummary:
+def get_total_hours_summary(tempos, reference_date: datetime.date) -> LogsSummary:
+    logs_summary = LogsSummary(reference_date)
 
-    logs_summary = LogsSummary()
-
-    week_start_date = get_start_of_week()
+    week_start_date = logs_summary.get_start_of_week()
+    total_hours_decimal = 0
 
     for tempo in tempos:
         Logger.log_debug(f"Getting hours for {tempo['name']}")
-        logs_list: List[HoursLog] = get_hours(tempo)
+        logs_list: List[HoursLog] = get_hours(tempo, reference_date)
 
         current_month_total = 0
         current_week_total = 0
@@ -242,14 +263,23 @@ def get_total_hours_summary(tempos) -> LogsSummary:
 
         Logger.log_info(
             get_left_justified_string(
-                f"Total weekly hours for {tempo['name']}", f": {current_week_total}"
+                f"Total weekly hours for {tempo['name']}",
+                f": {float_to_hours_minutes(current_week_total)}",
             )
         )
         Logger.log_info(
             get_left_justified_string(
-                f"Total monthly hours for {tempo['name']}", f": {current_month_total}"
+                f"Total monthly hours for {tempo['name']}",
+                f": {float_to_hours_minutes(current_month_total)}",
             )
         )
+        total_hours_decimal += current_month_total
+
+    Logger.log_info(
+        get_left_justified_string(
+            "Total monthly hours decimal", f": {total_hours_decimal}"
+        )
+    )
 
     return logs_summary
 
@@ -261,17 +291,16 @@ def get_jira_projects() -> dict:
         return config["projects"]
 
 
-def get_hours(tempo_details: dict) -> List[HoursLog]:
-    today = datetime.datetime.today()
-    Logger.log_debug(f"Today: {today}")
+def get_hours(tempo_details: dict, reference_date: datetime.date) -> List[HoursLog]:
+    Logger.log_debug(f"Current Date: {reference_date}")
 
-    first_day_month = today.replace(day=1)
+    first_day_month = reference_date.replace(day=1)
     Logger.log_debug(f"First day of month: {first_day_month}")
 
     api_url = (
         f"{TEMPO_API_BASE}{TEMPO_API_WORKLOGS_ENDPOINT}/{tempo_details['user']}?"
         f"from={first_day_month.strftime('%Y-%m-%d')}&"
-        f"to={today.strftime('%Y-%m-%d')}"
+        f"to={reference_date.strftime('%Y-%m-%d')}"
     )
 
     return get_hours_from_api(api_url, tempo_details["tempo_token"])
@@ -280,7 +309,6 @@ def get_hours(tempo_details: dict) -> List[HoursLog]:
 def get_hours_from_api(
     api_url: str, token: str, accumulative_hours: Union[None, List[HoursLog]] = None
 ) -> List[HoursLog]:
-
     if accumulative_hours is None:
         accumulative_hours = []
 
