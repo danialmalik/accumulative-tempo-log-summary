@@ -167,6 +167,14 @@ def cli_main():
 
     reference_date = sys.argv[1] if len(sys.argv) > 1 else None
 
+    if reference_date == "EOM":
+        # Get current month's last date
+        today = datetime.datetime.today()
+        reference_date = today.replace(
+            day=calendar.monthrange(today.year, today.month)[1]
+        )
+        reference_date = reference_date.strftime("%Y-%m-%d")
+
     if reference_date:
         try:
             Logger.log_info(f"Getting hours till {reference_date}")
@@ -196,27 +204,30 @@ def cli_main():
             )
         )
 
-    Logger.log_info(
-        get_centered_string("Week Hours", padding_char="="), color=Logger.CYAN
-    )
+    # FIXME: BROKEN! Doesn't work well with reference dates and when start of
+    # month is mid week.
+    #
+    # Logger.log_info(
+    #     get_centered_string("Week Hours", padding_char="="), color=Logger.CYAN
+    # )
 
-    Logger.log_info(
-        get_left_justified_string(
-            "Total Week Hours / required hours",
-            f": {float_to_hours_minutes(summary.get_total_week_hours())}",
-            f" / {float_to_hours_minutes(summary.get_required_hours_for_week())}",
-        )
-    )
-    difference: float = summary.get_week_work_required_difference()
+    # Logger.log_info(
+    #     get_left_justified_string(
+    #         "Total Week Hours / required hours",
+    #         f": {float_to_hours_minutes(summary.get_total_week_hours())}",
+    #         f" / {float_to_hours_minutes(summary.get_required_hours_for_week())}",
+    #     )
+    # )
+    # difference: float = summary.get_week_work_required_difference()
 
-    color = Logger.GREEN if difference >= 0 else Logger.YELLOW
+    # color = Logger.GREEN if difference >= 0 else Logger.YELLOW
 
-    Logger.log_info(
-        get_left_justified_string(
-            "Difference", f" : {float_to_hours_minutes(difference)}"
-        ),
-        color,
-    )
+    # Logger.log_info(
+    #     get_left_justified_string(
+    #         "Difference", f" : {float_to_hours_minutes(difference)}"
+    #     ),
+    #     color,
+    # )
 
     Logger.log_info(
         get_centered_string("Month Hours", padding_char="="), color=Logger.CYAN
@@ -315,10 +326,7 @@ def get_hours_from_api(
     Logger.log_debug(f"Getting hours from API: {api_url}")
     response = requests.get(api_url, headers={"Authorization": f"Bearer {token}"})
 
-    if response.status_code != 200:
-        print("Error getting hours from API")
-        print("response.text: ", response.text)
-        exit(1)
+    response.raise_for_status()
 
     response = response.json()
 
