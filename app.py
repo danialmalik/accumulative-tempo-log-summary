@@ -73,6 +73,12 @@ class LogsSummary:
 
     @property
     def total_month_hours(self) -> float:
+        """Return total number of working hours in current month."""
+        num_working_days = self.working_days_in_month
+        return num_working_days * 8
+
+    @property
+    def total_month_hours_so_far(self) -> float:
         current = self.reference_date
         total_hours = 0
         for day in range(1, current.day + 1):
@@ -83,6 +89,17 @@ class LogsSummary:
 
     @property
     def working_days_in_month(self) -> int:
+        current = self.reference_date
+        return sum(
+            1 for day in range(
+                1,
+                calendar.monthrange(current.year, current.month)[1] + 1
+            )
+            if datetime.date(current.year, current.month, day).weekday() < 5
+        )
+
+    @property
+    def working_days_in_month_so_far(self) -> int:
         current = self.reference_date
         working_days = 0
 
@@ -124,11 +141,11 @@ class LogsSummary:
 
     @property
     def required_hours_for_month(self) -> float:
-        return self.working_days_in_month * 8
+        return self.working_days_in_month_so_far * 8
 
     @property
     def month_work_required_difference(self) -> float:
-        return self.total_month_hours - self.required_hours_for_month
+        return self.total_month_hours_so_far - self.required_hours_for_month
 
 
 class Logger:
@@ -232,12 +249,18 @@ def cli_main():
     Logger.log_info(
         get_centered_string("Month Hours", padding_char="="), color=Logger.CYAN
     )
+    Logger.log_info(
+        get_left_justified_string(
+            "Total Month Hours",
+            f": {float_to_hours_minutes(summary.total_month_hours)}"
+        )
+    )
     difference: float = summary.month_work_required_difference
 
     Logger.log_info(
         get_left_justified_string(
-            "Total Month Hours / required hours",
-            f": {float_to_hours_minutes(summary.total_month_hours)} / ",
+            "Logged Hours / required hours so far",
+            f": {float_to_hours_minutes(summary.total_month_hours_so_far)} / ",
             f"{float_to_hours_minutes(summary.required_hours_for_month)}",
         )
     )
@@ -274,13 +297,13 @@ def get_total_hours_summary(tempos, reference_date: datetime.date) -> LogsSummar
 
         Logger.log_info(
             get_left_justified_string(
-                f"Total weekly hours for {tempo['name']}",
+                f"Logged weekly hours for {tempo['name']}",
                 f": {float_to_hours_minutes(current_week_total)}",
             )
         )
         Logger.log_info(
             get_left_justified_string(
-                f"Total monthly hours for {tempo['name']}",
+                f"Logged monthly hours for {tempo['name']}",
                 f": {float_to_hours_minutes(current_month_total)}",
             )
         )
@@ -288,7 +311,7 @@ def get_total_hours_summary(tempos, reference_date: datetime.date) -> LogsSummar
 
     Logger.log_info(
         get_left_justified_string(
-            "Total monthly hours decimal", f": {total_hours_decimal}"
+            "Logged monthly hours decimal", f": {total_hours_decimal}"
         )
     )
 
